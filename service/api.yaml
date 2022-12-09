@@ -1,0 +1,143 @@
+openapi: 3.0.3
+info:
+  title: Microblog API
+  description: Microblog API
+  version: 1.0.0
+components:
+  schemas:
+    PostId:
+      description: A unique post identifier in Base64URL format.
+      type: string
+      pattern: '[A-Za-z0-9_\-]+'
+    UserId:
+      description: A unique user identifier.
+      type: string
+      pattern: '[0-9a-f]+'
+    ISOTimestamp:
+      description: The time in ISO 8601 format in the UTC+0 time zone.
+      type: string
+      pattern: '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z'
+    Post:
+      type: object
+      nullable: false
+      properties:
+        id:
+          allOf:
+            - $ref: '#/components/schemas/PostId'
+            - nullable: false
+            - readOnly: true
+        text:
+          type: string
+          nullable: false
+        authorId:
+          allOf:
+            - $ref: '#/components/schemas/UserId'
+            - nullable: false
+            - readOnly: true
+        createdAt:
+          allOf:
+            - $ref: '#/components/schemas/ISOTimestamp'
+            - nullable: false
+            - readOnly: true
+    PageToken:
+      type: string
+      pattern: '[A-Za-z0-9_\-]+'
+paths:
+  '/api/v1/posts':
+    post:
+      summary: Publishing a post
+      parameters:
+        - in: header
+          name: System-Design-User-Id
+          required: true
+          description: >
+            The ID of the user who is authenticated in this request.
+          schema:
+            $ref: '#/components/schemas/UserId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Post'
+      responses:
+        200:
+          description: The post was successfully created. The response body contains the created post.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        401:
+          description: >
+            The user token is not in the request, or is in the wrong format.
+  '/api/v1/posts/{postId}':
+    get:
+      summary: Retrieving a post by ID
+      parameters:
+        - in: path
+          name: postId
+          required: true
+          schema:
+            $ref: '#/components/schemas/PostId'
+      responses:
+        200:
+          description: Пост найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        404:
+          description: The post with the specified identifier does not exist
+  '/api/v1/users/{userId}/posts':
+    get:
+      summary: Retrieving a user's recent posts page
+      description: >
+        Getting the page with the user's posts.
+        To get the first page (with the most recent posts), it is necessary to execute the query
+        without parameter `page`.
+        To get the next page, it is necessary to pass the next page's token into the `page` parameter,
+        received in the response body with the previous page.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            $ref: '#/components/schemas/UserId'
+        - in: query
+          name: page
+          description: Page Token
+          required: false
+          schema:
+            $ref: '#/components/schemas/PageToken'
+        - in: query
+          name: size
+          description: Number of posts per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        200:
+          description: Page with posts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  posts:
+                    type: array
+                    description: >
+                      Posts in reverse chronological order.
+                      The absence of this field is equivalent to an empty array.
+                    items:
+                      $ref: '#/components/schemas/Post'
+                  nextPage:
+                    allOf:
+                      - $ref: '#/components/schemas/PageToken'
+                      - nullable: false
+                      - description: >
+                          The token of the next page, if there is one.
+                          There is no field if the current page contains the user's earliest post.
+        400:
+          description: An invalid request, for example, due to an invalid page token.
