@@ -141,3 +141,10 @@ paths:
                           There is no field if the current page contains the user's earliest post.
         400:
           description: An invalid request, for example, due to an invalid page token.
+
+  /maintenance/ping:
+    get:
+      summary: Service endpoint to determine if the service is ready to work
+      responses:
+        200:
+          description: Service is ready to go

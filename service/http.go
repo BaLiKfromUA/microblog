@@ -41,7 +41,7 @@ func (h *HTTPHandler) CreatePost(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	post, err = h.repo.CreatePost(userId, post)
+	post, err = h.repo.CreatePost(r.Context(), userId, post)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
@@ -59,7 +59,7 @@ func (h *HTTPHandler) GetPostById(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	post, err := h.repo.GetPostById(model.PostId(postId))
+	post, err := h.repo.GetPostById(r.Context(), model.PostId(postId))
 
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusNotFound)
@@ -91,11 +91,15 @@ func (h *HTTPHandler) GetPosts(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	posts, nextPageToken, err := h.repo.GetPosts(model.UserId(userId), pageToken, size)
+	posts, nextPageToken, err := h.repo.GetPosts(r.Context(), model.UserId(userId), pageToken, size)
 
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	if posts == nil {
+		posts = []model.Post{}
 	}
 
 	var respBody GetFeedResponse
@@ -114,6 +118,7 @@ func createRouter(handler *HTTPHandler) *mux.Router {
 	r.HandleFunc("/api/v1/posts", handler.CreatePost).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/posts/{postId:[A-Za-z0-9_\\-]+}", handler.GetPostById).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/users/{userId:[0-9a-f]+}/posts", handler.GetPosts).Methods(http.MethodGet)
+	r.HandleFunc("/maintenance/ping", handler.Ping).Methods(http.MethodGet)
 
 	return r
 }
@@ -134,4 +139,8 @@ func NewServer(repo repo.Repository) *http.Server {
 	}
 
 	return srv
+}
+
+func (h *HTTPHandler) Ping(rw http.ResponseWriter, _ *http.Request) {
+	rw.WriteHeader(http.StatusOK)
 }
