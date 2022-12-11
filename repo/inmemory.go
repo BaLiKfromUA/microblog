@@ -90,9 +90,11 @@ func (storage *InMemoryRepository) GetPosts(_ context.Context, id model.UserId, 
 		var ok bool
 		feedTail, ok = storage.userPages[page]
 		storage.pagesMu.Unlock()
-		if !ok {
+
+		if !ok || feedTail == nil || feedTail.Value.(model.Post).AuthorId != id {
 			return posts, model.EmptyPage, model.InvalidPageToken
 		}
+
 	} else {
 		l, ok := storage.userPosts[id]
 		if ok {
