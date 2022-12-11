@@ -1,10 +1,13 @@
 package repo
 
-import "microblog/model"
+import (
+	"context"
+	"microblog/model"
+)
 
 type Repository interface {
-	CreatePost(id model.UserId, post model.Post) (model.Post, error)
-	GetPostById(id model.PostId) (model.Post, error)
-	GetPosts(id model.UserId, page model.PageToken, size int) ([]model.Post, model.PageToken, error)
-	clear()
+	CreatePost(ctx context.Context, id model.UserId, post model.Post) (model.Post, error)
+	GetPostById(ctx context.Context, id model.PostId) (model.Post, error)
+	GetPosts(ctx context.Context, id model.UserId, page model.PageToken, size int) ([]model.Post, model.PageToken, error)
+	clear(ctx context.Context)
 }

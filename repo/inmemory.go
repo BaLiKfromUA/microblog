@@ -2,6 +2,7 @@ package repo
 
 import (
 	"container/list"
+	"context"
 	"golang.org/x/exp/maps"
 	"microblog/model"
 	"microblog/utils"
@@ -28,7 +29,7 @@ func NewInMemoryRepository() Repository {
 	}
 }
 
-func (storage *InMemoryRepository) CreatePost(id model.UserId, post model.Post) (model.Post, error) {
+func (storage *InMemoryRepository) CreatePost(_ context.Context, id model.UserId, post model.Post) (model.Post, error) {
 	post.Id = utils.CreateRandomPostId()
 	post.AuthorId = id
 	post.CreatedAt = utils.Now()
@@ -62,7 +63,7 @@ func (storage *InMemoryRepository) tryToCreatePost(post model.Post) bool {
 	return true
 }
 
-func (storage *InMemoryRepository) GetPostById(id model.PostId) (model.Post, error) {
+func (storage *InMemoryRepository) GetPostById(_ context.Context, id model.PostId) (model.Post, error) {
 	storage.mu.Lock()
 	defer storage.mu.Unlock()
 	post, ok := storage.postById[id]
@@ -74,7 +75,7 @@ func (storage *InMemoryRepository) GetPostById(id model.PostId) (model.Post, err
 	}
 }
 
-func (storage *InMemoryRepository) GetPosts(id model.UserId, page model.PageToken, size int) ([]model.Post, model.PageToken, error) {
+func (storage *InMemoryRepository) GetPosts(_ context.Context, id model.UserId, page model.PageToken, size int) ([]model.Post, model.PageToken, error) {
 	storage.mu.RLock()
 	defer storage.mu.RUnlock()
 
@@ -89,9 +90,11 @@ func (storage *InMemoryRepository) GetPosts(id model.UserId, page model.PageToke
 		var ok bool
 		feedTail, ok = storage.userPages[page]
 		storage.pagesMu.Unlock()
-		if !ok {
+
+		if !ok || feedTail == nil || feedTail.Value.(model.Post).AuthorId != id {
 			return posts, model.EmptyPage, model.InvalidPageToken
 		}
+
 	} else {
 		l, ok := storage.userPosts[id]
 		if ok {
@@ -117,7 +120,7 @@ func (storage *InMemoryRepository) GetPosts(id model.UserId, page model.PageToke
 	return posts, pageToken, err
 }
 
-func (storage *InMemoryRepository) clear() {
+func (storage *InMemoryRepository) clear(_ context.Context) {
 	storage.mu.Lock()
 	storage.pagesMu.Lock()
 	defer storage.mu.Unlock()
