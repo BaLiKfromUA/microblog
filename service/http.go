@@ -50,6 +50,53 @@ func (h *HTTPHandler) CreatePost(rw http.ResponseWriter, r *http.Request) {
 	utils.WriteResponseBody(rw, post)
 }
 
+func (h *HTTPHandler) EditPost(rw http.ResponseWriter, r *http.Request) {
+	userId, err := utils.GetAuthorizedUserId(r)
+
+	if err != nil {
+		http.Error(rw, "Empty or Invalid User Id!", http.StatusUnauthorized)
+		return
+	}
+
+	vars := mux.Vars(r)
+	postId, ok := vars["postId"]
+
+	if !ok {
+		http.Error(rw, "Invalid post id in path", http.StatusNotFound)
+		return
+	}
+
+	oldPost, err := h.repo.GetPostById(r.Context(), model.PostId(postId))
+
+	if err != nil {
+		http.Error(rw, "Invalid post id in path", http.StatusNotFound)
+		return
+	}
+
+	if oldPost.AuthorId != userId {
+		http.Error(rw, "Given user id is not a creator of requested post", http.StatusForbidden)
+		return
+	}
+
+	var postToEdit model.Post
+	err = json.NewDecoder(r.Body).Decode(&postToEdit)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	postToEdit.Id = model.PostId(postId)
+
+	resultedPost, err := h.repo.EditPost(r.Context(), userId, postToEdit)
+
+	if err != nil {
+		http.Error(rw, "Invalid post id in path", http.StatusNotFound)
+		return
+	}
+
+	utils.WriteResponseBody(rw, resultedPost)
+}
+
 func (h *HTTPHandler) GetPostById(rw http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	postId, ok := vars["postId"]
@@ -116,6 +163,7 @@ func createRouter(handler *HTTPHandler) *mux.Router {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/api/v1/posts", handler.CreatePost).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/posts/{postId:[A-Za-z0-9_\\-]+}", handler.EditPost).Methods(http.MethodPatch)
 	r.HandleFunc("/api/v1/posts/{postId:[A-Za-z0-9_\\-]+}", handler.GetPostById).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/users/{userId:[0-9a-f]+}/posts", handler.GetPosts).Methods(http.MethodGet)
 	r.HandleFunc("/maintenance/ping", handler.Ping).Methods(http.MethodGet)

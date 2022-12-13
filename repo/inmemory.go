@@ -32,7 +32,9 @@ func NewInMemoryRepository() Repository {
 func (storage *InMemoryRepository) CreatePost(_ context.Context, id model.UserId, post model.Post) (model.Post, error) {
 	post.Id = utils.CreateRandomPostId()
 	post.AuthorId = id
-	post.CreatedAt = utils.Now()
+	now := utils.Now()
+	post.CreatedAt = now
+	post.LastModifiedAt = now
 
 	ok := storage.tryToCreatePost(post)
 
@@ -40,6 +42,16 @@ func (storage *InMemoryRepository) CreatePost(_ context.Context, id model.UserId
 		return post, model.PostCreationFailed
 	} else {
 		return post, nil
+	}
+}
+
+func (storage *InMemoryRepository) EditPost(ctx context.Context, id model.UserId, post model.Post) (model.Post, error) {
+	result := storage.tryToEditPost(post)
+
+	if result != nil {
+		return *result, nil
+	} else {
+		return model.Post{}, model.PostNotFound
 	}
 }
 
@@ -61,6 +73,20 @@ func (storage *InMemoryRepository) tryToCreatePost(post model.Post) bool {
 	l.PushBack(post)
 
 	return true
+}
+
+func (storage *InMemoryRepository) tryToEditPost(post model.Post) *model.Post {
+	storage.mu.Lock()
+	defer storage.mu.Unlock()
+
+	if p, ok := storage.postById[post.Id]; ok {
+		p.Text = post.Text
+		p.LastModifiedAt = utils.Now()
+		storage.postById[p.Id] = p
+		return &p
+	}
+
+	return nil
 }
 
 func (storage *InMemoryRepository) GetPostById(_ context.Context, id model.PostId) (model.Post, error) {
