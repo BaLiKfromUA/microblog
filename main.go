@@ -10,6 +10,7 @@ import (
 const (
 	modeInMemory = "inmemory"
 	modeMongo    = "mongo"
+	modeCache    = "cached"
 )
 
 func main() {
@@ -25,6 +26,8 @@ func main() {
 		r = repo.NewInMemoryRepository()
 	case modeMongo:
 		r = repo.NewMongoDatabaseRepository()
+	case modeCache:
+		r = repo.NewRedisRepository(repo.NewMongoDatabaseRepository())
 	default:
 		log.Fatalf("Unexpected mode flag: %s", mode)
 	}

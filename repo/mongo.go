@@ -70,6 +70,7 @@ func (storage *MongoDatabaseRepository) CreatePost(ctx context.Context, id model
 
 	now := utils.Now()
 	post.CreatedAt = now
+	post.LastModifiedAt = now
 
 	_, err := storage.posts.InsertOne(ctx, post)
 
@@ -79,6 +80,29 @@ func (storage *MongoDatabaseRepository) CreatePost(ctx context.Context, id model
 	}
 
 	return post, err
+}
+
+func (storage *MongoDatabaseRepository) EditPost(ctx context.Context, id model.UserId, post model.Post) (model.Post, error) {
+	var result model.Post
+
+	err := storage.posts.FindOneAndUpdate(ctx,
+		bson.M{"id": post.Id},
+		bson.D{
+			{"$set",
+				bson.D{
+					{"text", post.Text},
+					{"lastModifiedAt", utils.Now()},
+				}},
+		},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&result)
+
+	if err != nil && errors.Is(err, mongo.ErrNoDocuments) {
+		log.Printf(err.Error())
+		err = model.PostNotFound
+	}
+
+	return result, err
 }
 
 func (storage *MongoDatabaseRepository) GetPostById(ctx context.Context, id model.PostId) (model.Post, error) {
@@ -144,7 +168,13 @@ func (storage *MongoDatabaseRepository) GetPosts(ctx context.Context, id model.U
 	return result, newToken, nil
 }
 
-func (storage *MongoDatabaseRepository) clear(ctx context.Context) {
+func (storage *MongoDatabaseRepository) Clear(ctx context.Context) error {
+	err := storage.posts.Drop(ctx)
+	if err != nil {
+		return err
+	}
+
 	//TODO implement me
 	panic("implement me")
+	return nil
 }

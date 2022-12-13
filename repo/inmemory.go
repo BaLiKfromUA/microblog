@@ -29,17 +29,30 @@ func NewInMemoryRepository() Repository {
 	}
 }
 
-func (storage *InMemoryRepository) CreatePost(_ context.Context, id model.UserId, post model.Post) (model.Post, error) {
+func (storage *InMemoryRepository) CreatePost(ctx context.Context, userId model.UserId, post model.Post) (model.Post, error) {
 	post.Id = utils.CreateRandomPostId()
-	post.AuthorId = id
-	post.CreatedAt = utils.Now()
+	post.AuthorId = userId
+
+	now := utils.Now()
+	post.CreatedAt = now
+	post.LastModifiedAt = now
 
 	ok := storage.tryToCreatePost(post)
 
 	if !ok {
-		return post, model.PostCreationFailed
+		return model.Post{}, model.PostCreationFailed
 	} else {
 		return post, nil
+	}
+}
+
+func (storage *InMemoryRepository) EditPost(ctx context.Context, id model.UserId, post model.Post) (model.Post, error) {
+	result := storage.tryToEditPost(post)
+
+	if result != nil {
+		return *result, nil
+	} else {
+		return model.Post{}, model.PostNotFound
 	}
 }
 
@@ -58,14 +71,29 @@ func (storage *InMemoryRepository) tryToCreatePost(post model.Post) bool {
 		l = list.New()
 		storage.userPosts[post.AuthorId] = l
 	}
-	l.PushBack(post)
+	l.PushBack(post.Id)
 
 	return true
 }
 
-func (storage *InMemoryRepository) GetPostById(_ context.Context, id model.PostId) (model.Post, error) {
+func (storage *InMemoryRepository) tryToEditPost(post model.Post) *model.Post {
 	storage.mu.Lock()
 	defer storage.mu.Unlock()
+
+	if p, ok := storage.postById[post.Id]; ok {
+		p.Text = post.Text
+		p.LastModifiedAt = utils.Now()
+		storage.postById[p.Id] = p
+		return &p
+	}
+
+	return nil
+}
+
+func (storage *InMemoryRepository) GetPostById(ctx context.Context, id model.PostId) (model.Post, error) {
+	storage.mu.RLock()
+	defer storage.mu.RUnlock()
+
 	post, ok := storage.postById[id]
 
 	if !ok {
@@ -75,7 +103,7 @@ func (storage *InMemoryRepository) GetPostById(_ context.Context, id model.PostI
 	}
 }
 
-func (storage *InMemoryRepository) GetPosts(_ context.Context, id model.UserId, page model.PageToken, size int) ([]model.Post, model.PageToken, error) {
+func (storage *InMemoryRepository) GetPosts(ctx context.Context, id model.UserId, page model.PageToken, size int) ([]model.Post, model.PageToken, error) {
 	storage.mu.RLock()
 	defer storage.mu.RUnlock()
 
@@ -85,16 +113,18 @@ func (storage *InMemoryRepository) GetPosts(_ context.Context, id model.UserId, 
 
 	var feedTail *list.Element
 
-	if page != model.EmptyPage {
+	if page != "none" {
 		storage.pagesMu.Lock()
 		var ok bool
 		feedTail, ok = storage.userPages[page]
 		storage.pagesMu.Unlock()
-
-		if !ok || feedTail == nil || feedTail.Value.(model.Post).AuthorId != id {
-			return posts, model.EmptyPage, model.InvalidPageToken
+		if !ok {
+			return posts, "none", model.InvalidPageToken
 		}
 
+		if feedTail == nil || storage.postById[feedTail.Value.(model.PostId)].AuthorId != id {
+			return posts, "none", model.InvalidPageToken
+		}
 	} else {
 		l, ok := storage.userPosts[id]
 		if ok {
@@ -103,7 +133,7 @@ func (storage *InMemoryRepository) GetPosts(_ context.Context, id model.UserId, 
 	}
 
 	for feedTail != nil && size > 0 {
-		posts = append(posts, feedTail.Value.(model.Post))
+		posts = append(posts, storage.postById[feedTail.Value.(model.PostId)])
 		feedTail = feedTail.Prev()
 		size -= 1
 	}
@@ -114,13 +144,13 @@ func (storage *InMemoryRepository) GetPosts(_ context.Context, id model.UserId, 
 		storage.userPages[pageToken] = feedTail
 		storage.pagesMu.Unlock()
 	} else {
-		pageToken = model.EmptyPage
+		pageToken = "none"
 	}
 
 	return posts, pageToken, err
 }
 
-func (storage *InMemoryRepository) clear(_ context.Context) {
+func (storage *InMemoryRepository) Clear(ctx context.Context) error {
 	storage.mu.Lock()
 	storage.pagesMu.Lock()
 	defer storage.mu.Unlock()
@@ -129,4 +159,5 @@ func (storage *InMemoryRepository) clear(_ context.Context) {
 	maps.Clear(storage.postById)
 	maps.Clear(storage.userPages)
 	maps.Clear(storage.userPosts)
+	return nil
 }
