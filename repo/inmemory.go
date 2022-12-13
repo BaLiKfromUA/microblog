@@ -120,7 +120,7 @@ func (storage *InMemoryRepository) GetPosts(_ context.Context, id model.UserId, 
 	return posts, pageToken, err
 }
 
-func (storage *InMemoryRepository) clear(_ context.Context) {
+func (storage *InMemoryRepository) Clear(ctx context.Context) error {
 	storage.mu.Lock()
 	storage.pagesMu.Lock()
 	defer storage.mu.Unlock()
@@ -129,4 +129,5 @@ func (storage *InMemoryRepository) clear(_ context.Context) {
 	maps.Clear(storage.postById)
 	maps.Clear(storage.userPages)
 	maps.Clear(storage.userPosts)
+	return nil
 }

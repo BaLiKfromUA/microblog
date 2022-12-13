@@ -144,7 +144,13 @@ func (storage *MongoDatabaseRepository) GetPosts(ctx context.Context, id model.U
 	return result, newToken, nil
 }
 
-func (storage *MongoDatabaseRepository) clear(ctx context.Context) {
+func (storage *MongoDatabaseRepository) Clear(ctx context.Context) error {
+	err := storage.posts.Drop(ctx)
+	if err != nil {
+		return err
+	}
+
 	//TODO implement me
 	panic("implement me")
+	return nil
 }
