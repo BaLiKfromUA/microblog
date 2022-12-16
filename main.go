@@ -8,31 +8,32 @@ import (
 )
 
 const (
-	modeInMemory = "inmemory"
-	modeMongo    = "mongo"
-	modeCache    = "cached"
+	modeServer = "SERVER"
+	modeWorker = "WORKER"
 )
 
 func main() {
 	var r repo.Repository
 
-	mode, ok := os.LookupEnv("STORAGE_MODE")
+	mode, ok := os.LookupEnv("APP_MODE")
 	if !ok {
-		mode = modeMongo
+		mode = modeServer
 	}
 
+	r = repo.NewRedisRepository(repo.NewMongoDatabaseRepository())
+
 	switch mode {
-	case modeInMemory:
-		r = repo.NewInMemoryRepository()
-	case modeMongo:
-		r = repo.NewMongoDatabaseRepository()
-	case modeCache:
-		r = repo.NewRedisRepository(repo.NewMongoDatabaseRepository())
+	case modeServer:
+		srv, err := service.NewServer(r)
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+
+		log.Printf("Start serving HTTP at %s", srv.Addr)
+		log.Fatal(srv.ListenAndServe())
+	case modeWorker:
+		log.Fatal(service.StartConsumer(r))
 	default:
 		log.Fatalf("Unexpected mode flag: %s", mode)
 	}
-
-	srv := service.NewServer(r)
-	log.Printf("Start serving HTTP at %s", srv.Addr)
-	log.Fatal(srv.ListenAndServe())
 }

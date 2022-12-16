@@ -179,6 +179,145 @@ paths:
                           There is no field if the current page contains the user's earliest post.
         400:
           description: An invalid request, for example, due to an invalid page token.
+  '/api/v1/users/{userId}/subscribe':
+    post:
+      summary: User subscription
+      description: >
+        The current authorized user subscribes to the specified user
+        Re-subscribing to the user is considered a successful request. However, we should not see him in the subscribers twice.
+        Subscribing to yourself is an invalid request, must return 400.
+      parameters:
+        - in: header
+          name: System-Design-User-Id
+          required: true
+          description: >
+            The ID of the user who is authenticated in this request.
+          schema:
+            $ref: '#/components/schemas/UserId'
+        - in: path
+          name: userId
+          required: true
+          schema:
+            $ref: '#/components/schemas/UserId'
+      responses:
+        200:
+          description: The subscription was successful
+        400:
+          description: Invalid request
+  '/api/v1/subscriptions':
+    get:
+      summary: Obtaining users who have been subscribed to
+      description: >
+        Getting the list of IDs of users subscribed to
+      parameters:
+        - in: header
+          name: System-Design-User-Id
+          required: true
+          description: >
+            The ID of the user who is authenticated in this request.
+          schema:
+            $ref: '#/components/schemas/UserId'
+      responses:
+        200:
+          description: Array of user IDs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    description: >
+                      An array of strings containing user IDs. The order is not important.
+                    items:
+                      type: string
+        400:
+          description: Invalid request
+  '/api/v1/subscribers':
+    get:
+      summary: Getting users who are subscribed to the current user
+      description: >
+        Getting a list of IDs of users who have subscribed to the current user
+      parameters:
+        - in: header
+          name: System-Design-User-Id
+          required: true
+          description: >
+            The ID of the user who is authenticated in this request.
+          schema:
+            $ref: '#/components/schemas/UserId'
+      responses:
+        200:
+          description: Array of user IDs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    description: >
+                      An array of strings containing user IDs. The order is not important.
+                    items:
+                      type: string
+        400:
+          description: Invalid request
+  '/api/v1/feed':
+    get:
+      summary: Getting the posts feed for an authorized user
+      description: >
+        A user's feed is a set of user posts to which the user is subscribed, ordered by time.
+        To get the first page (with the most recent posts), it is necessary to run the query
+        without parameter `page`.
+        To get the next page, it is necessary to pass the next page's token into the `page` parameter,
+        received in the response body with the previous page.
+      parameters:
+        - in: header
+          name: System-Design-User-Id
+          required: true
+          description: >
+            The ID of the user who is authenticated in this request.
+          schema:
+            $ref: '#/components/schemas/UserId'
+        - in: query
+          name: page
+          description: Page Token
+          required: false
+          schema:
+            $ref: '#/components/schemas/PageToken'
+        - in: query
+          name: size
+          description: Number of posts per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        200:
+          description: Page with posts from the feed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  posts:
+                    type: array
+                    description: >
+                      Posts in reverse chronological order.
+                      The absence of this field is equivalent to an empty array.
+                    items:
+                      $ref: '#/components/schemas/Post'
+                  nextPage:
+                    allOf:
+                      - $ref: '#/components/schemas/PageToken'
+                      - nullable: false
+                      - description: >
+                          The token of the next page, if there is one.
+                          There is no field if the current page contains the feed's earliest post.
+        400:
+          description: Invalid request
 
   /maintenance/ping:
     get:
