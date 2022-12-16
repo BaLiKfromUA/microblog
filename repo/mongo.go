@@ -160,7 +160,7 @@ func (storage *MongoDatabaseRepository) GetPostById(ctx context.Context, id mode
 
 func (storage *MongoDatabaseRepository) GetPosts(ctx context.Context, id model.UserId, page model.PageToken, size int) ([]model.Post, model.PageToken, error) {
 	var result []model.Post
-	newToken := model.PageToken("none")
+	newToken := model.EmptyPage
 
 	opts := options.Find().
 		SetSort(bson.D{{"authorId", 1}, {"_id", -1}}).
@@ -305,13 +305,13 @@ func (storage *MongoDatabaseRepository) GetFeed(ctx context.Context, id model.Us
 	} else {
 		token, err := primitive.ObjectIDFromHex(string(page))
 		if err != nil {
-			return result, "none", model.InvalidPageToken
+			return result, model.EmptyPage, model.InvalidPageToken
 		}
 
 		var r model.FeedMetadataDocument
 		err = storage.feeds.FindOne(ctx, bson.M{"token": token}).Decode(&r)
 		if err != nil || r.UserId != id {
-			return result, "none", model.InvalidPageToken
+			return result, model.EmptyPage, model.InvalidPageToken
 		}
 
 		cursor, err := storage.feeds.Find(ctx,
