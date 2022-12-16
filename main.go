@@ -8,9 +8,8 @@ import (
 )
 
 const (
-	modeInMemory = "inmemory"
-	modeMongo    = "mongo"
-	modeCache    = "cached"
+	modeMongo = "mongo"
+	modeCache = "cached"
 )
 
 func main() {
@@ -22,8 +21,6 @@ func main() {
 	}
 
 	switch mode {
-	case modeInMemory:
-		r = repo.NewInMemoryRepository()
 	case modeMongo:
 		r = repo.NewMongoDatabaseRepository()
 	case modeCache:

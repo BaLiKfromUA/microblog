@@ -22,7 +22,10 @@ import (
 var _ Repository = (*MongoDatabaseRepository)(nil)
 
 type MongoDatabaseRepository struct {
-	posts *mongo.Collection
+	posts     *mongo.Collection
+	feeds     *mongo.Collection
+	following *mongo.Collection
+	followed  *mongo.Collection
 }
 
 func NewMongoDatabaseRepository() Repository {
@@ -42,8 +45,15 @@ func NewMongoDatabaseRepository() Repository {
 
 	posts := client.Database(dbName).Collection("posts")
 	ensureIndexesForPosts(ctx, posts)
+	feeds := client.Database(dbName).Collection("feeds")
+	ensureIndexesForFeed(ctx, feeds)
 
-	return &MongoDatabaseRepository{posts: posts}
+	following := client.Database(dbName).Collection("following")
+	ensureIndexesById(ctx, following)
+	followed := client.Database(dbName).Collection("followed")
+	ensureIndexesById(ctx, followed)
+
+	return &MongoDatabaseRepository{posts: posts, feeds: feeds, followed: followed, following: following}
 }
 
 func ensureIndexesForPosts(ctx context.Context, collection *mongo.Collection) {
@@ -60,6 +70,39 @@ func ensureIndexesForPosts(ctx context.Context, collection *mongo.Collection) {
 	_, err := collection.Indexes().CreateMany(ctx, indexModels, opts)
 	if err != nil {
 		panic(fmt.Errorf("failed to ensure indexes %w", err))
+	}
+}
+
+func ensureIndexesForFeed(ctx context.Context, collection *mongo.Collection) {
+	indexModels := []mongo.IndexModel{
+		{
+			Keys: bsonx.Doc{
+				{Key: "userId", Value: bsonx.Int32(1)},
+				{Key: "token", Value: bsonx.Int32(-1)},
+			},
+		},
+	}
+	opts := options.CreateIndexes().SetMaxTime(10 * time.Second)
+
+	_, err := collection.Indexes().CreateMany(ctx, indexModels, opts)
+	if err != nil {
+		panic(fmt.Errorf("failed to ensure indexes %w", err))
+	}
+}
+
+func ensureIndexesById(ctx context.Context, collection *mongo.Collection) {
+	indexModels := []mongo.IndexModel{
+		{
+			Keys: bsonx.Doc{
+				{Key: "_id", Value: bsonx.Int32(1)},
+			},
+		},
+	}
+	opts := options.CreateIndexes().SetMaxTime(10 * time.Second)
+
+	_, err := collection.Indexes().CreateMany(ctx, indexModels, opts)
+	if err != nil {
+		panic(fmt.Errorf("failed to ensure indexes by id %w", err))
 	}
 }
 
@@ -168,13 +211,133 @@ func (storage *MongoDatabaseRepository) GetPosts(ctx context.Context, id model.U
 	return result, newToken, nil
 }
 
-func (storage *MongoDatabaseRepository) Clear(ctx context.Context) error {
-	err := storage.posts.Drop(ctx)
+func (storage *MongoDatabaseRepository) Subscribe(ctx context.Context, subscriberId model.UserId, targetId model.UserId) error {
+	if subscriberId == targetId {
+		return fmt.Errorf("fromId == toId --> %s", subscriberId)
+	}
+
+	opts := options.Update().SetUpsert(true)
+
+	update := bson.M{
+		"$addToSet": bson.M{
+			"ids": bson.M{"$each": []model.UserId{subscriberId}},
+		},
+	}
+
+	result, err := storage.followed.UpdateOne(ctx, bson.M{"_id": targetId}, update, opts)
+
 	if err != nil {
 		return err
 	}
 
-	//TODO implement me
-	panic("implement me")
+	if result.ModifiedCount+result.UpsertedCount == 0 {
+		return model.AlreadySubscribed
+	}
+
+	update = bson.M{
+		"$addToSet": bson.M{
+			"ids": bson.M{"$each": []model.UserId{targetId}},
+		},
+	}
+
+	_, err = storage.following.UpdateOne(ctx, bson.M{"_id": subscriberId}, update, opts)
+
+	if err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (storage *MongoDatabaseRepository) GetSubscriptions(ctx context.Context, id model.UserId) ([]model.UserId, error) {
+	var result []model.UserId
+	var doc model.SubscriptionsDocument
+	err := storage.following.FindOne(ctx, bson.M{"_id": id}).Decode(&doc)
+
+	if err == nil {
+		result = doc.Ids
+	}
+
+	if err != nil && errors.Is(err, mongo.ErrNoDocuments) {
+		log.Printf(err.Error())
+		err = nil
+		result = []model.UserId{}
+	}
+
+	return result, err
+}
+
+func (storage *MongoDatabaseRepository) GetSubscribers(ctx context.Context, id model.UserId) ([]model.UserId, error) {
+	var result []model.UserId
+	var doc model.SubscriptionsDocument
+	err := storage.followed.FindOne(ctx, bson.M{"_id": id}).Decode(&doc)
+
+	if err == nil {
+		result = doc.Ids
+	}
+
+	if err != nil && errors.Is(err, mongo.ErrNoDocuments) {
+		log.Printf(err.Error())
+		err = nil
+		result = []model.UserId{}
+	}
+
+	return result, err
+}
+
+func (storage *MongoDatabaseRepository) GetFeed(ctx context.Context, id model.UserId, page model.PageToken, size int) ([]model.FeedMetadataDocument, model.PageToken, error) {
+	var result []model.FeedMetadataDocument
+	newToken := model.EmptyPage
+
+	opts := options.Find().
+		SetSort(bson.D{{"userId", 1}, {"token", -1}}).
+		SetLimit(int64(size + 1))
+
+	if page == model.EmptyPage {
+		cursor, err := storage.feeds.Find(ctx, bson.D{{"userId", id}}, opts)
+		if err != nil {
+			return result, newToken, err
+		}
+
+		if err = cursor.All(ctx, &result); err != nil {
+			return result, newToken, err
+		}
+	} else {
+		token, err := primitive.ObjectIDFromHex(string(page))
+		if err != nil {
+			return result, "none", model.InvalidPageToken
+		}
+
+		var r model.FeedMetadataDocument
+		err = storage.feeds.FindOne(ctx, bson.M{"token": token}).Decode(&r)
+		if err != nil || r.UserId != id {
+			return result, "none", model.InvalidPageToken
+		}
+
+		cursor, err := storage.feeds.Find(ctx,
+			bson.D{{"userId", id}, {"token", bson.M{"$lt": token}}}, opts)
+
+		if err != nil {
+			return result, newToken, err
+		}
+
+		if err = cursor.All(ctx, &result); err != nil {
+			return result, newToken, err
+		}
+	}
+
+	if len(result) > 1 && len(result) == size+1 {
+		newToken = model.PageToken(result[len(result)-2].Token.Hex())
+		result = result[0 : len(result)-1]
+	} else {
+		newToken = model.EmptyPage
+	}
+
+	return result, newToken, nil
+}
+
+func (storage *MongoDatabaseRepository) AddPostToFeed(ctx context.Context, post model.FeedMetadataDocument) error {
+	_, err := storage.feeds.InsertOne(ctx, post)
+
+	return err
 }

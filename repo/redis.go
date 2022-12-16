@@ -113,7 +113,114 @@ func (cache *RedisRepository) GetPosts(ctx context.Context, id model.UserId, pag
 	return posts, newPage, err
 }
 
-func (cache *RedisRepository) Clear(ctx context.Context) error {
-	//TODO implement me
-	panic("implement me")
+func (cache *RedisRepository) Subscribe(ctx context.Context, from model.UserId, to model.UserId) error {
+	err := cache.persistentRepo.Subscribe(ctx, from, to)
+
+	if err == nil {
+		keyFrom := utils.CreateRedisKeyForSubscriptions(from)
+		keyTo := utils.CreateRedisKeyForSubscribers(to)
+		cache.client.Del(ctx, keyFrom)
+		cache.client.Del(ctx, keyTo)
+	}
+
+	return err
+}
+
+func (cache *RedisRepository) GetSubscriptions(ctx context.Context, id model.UserId) ([]model.UserId, error) {
+	key := utils.CreateRedisKeyForSubscriptions(id)
+	result := cache.client.Get(ctx, key)
+
+	switch serialized, err := result.Result(); {
+	case err == redis.Nil:
+		// continue execution
+	case err != nil:
+		return []model.UserId{}, fmt.Errorf("failed to get value from redis due to error %s", err)
+	default:
+		log.Printf("Successfully obtained ids from cache for key %s", key)
+		var ids []model.UserId
+		err = json.Unmarshal([]byte(serialized), &ids)
+		return ids, err
+	}
+
+	ids, err := cache.persistentRepo.GetSubscriptions(ctx, id)
+
+	if err == nil {
+		serialized, _ := json.Marshal(ids)
+		cache.client.Set(ctx, key, serialized, time.Hour)
+	}
+
+	return ids, err
+}
+
+func (cache *RedisRepository) GetSubscribers(ctx context.Context, id model.UserId) ([]model.UserId, error) {
+	key := utils.CreateRedisKeyForSubscribers(id)
+	result := cache.client.Get(ctx, key)
+
+	switch serialized, err := result.Result(); {
+	case err == redis.Nil:
+		// continue execution
+	case err != nil:
+		return []model.UserId{}, fmt.Errorf("failed to get value from redis due to error %s", err)
+	default:
+		log.Printf("Successfully obtained ids from cache for key %s", key)
+		var ids []model.UserId
+		err = json.Unmarshal([]byte(serialized), &ids)
+		return ids, err
+	}
+
+	ids, err := cache.persistentRepo.GetSubscribers(ctx, id)
+
+	if err == nil {
+		serialized, _ := json.Marshal(ids)
+		cache.client.Set(ctx, key, serialized, time.Hour)
+	}
+
+	return ids, err
+}
+
+func (cache *RedisRepository) GetFeed(ctx context.Context, id model.UserId, page model.PageToken, size int) ([]model.FeedMetadataDocument, model.PageToken, error) {
+	// we cache only first page for each user
+	if page != model.EmptyPage {
+		return cache.persistentRepo.GetFeed(ctx, id, page, size)
+	}
+
+	key := utils.CreateRedisKeyForFeedPage(id)
+	result := cache.client.Get(ctx, key)
+
+	switch serialized, err := result.Result(); {
+	case err == redis.Nil:
+		// continue execution
+	case err != nil:
+		return []model.FeedMetadataDocument{}, model.EmptyPage, fmt.Errorf("failed to get value from redis due to error %s", err)
+	default:
+		log.Printf("Successfully obtained first feed page from cache for key %s", key)
+		var record model.FeedPageCacheRecord
+		_ = json.Unmarshal([]byte(serialized), &record)
+
+		if size == len(record.FeedMetadata) {
+			return record.FeedMetadata, record.Page, nil
+		}
+		// continue execution
+	}
+
+	feed, newPage, err := cache.persistentRepo.GetFeed(ctx, id, page, size)
+
+	if err == nil {
+		record := model.FeedPageCacheRecord{FeedMetadata: feed, Page: newPage}
+		serialized, _ := json.Marshal(record)
+		cache.client.Set(ctx, key, serialized, time.Hour)
+	}
+
+	return feed, newPage, err
+}
+
+func (cache *RedisRepository) AddPostToFeed(ctx context.Context, post model.FeedMetadataDocument) error {
+	err := cache.persistentRepo.AddPostToFeed(ctx, post)
+
+	if err == nil {
+		key := utils.CreateRedisKeyForFeedPage(post.UserId)
+		cache.client.Del(ctx, key)
+	}
+
+	return err
 }
