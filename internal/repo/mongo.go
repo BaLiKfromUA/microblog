@@ -9,8 +9,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/bsonx"
 	"log"
-	"microblog/model"
-	"microblog/utils"
+	"microblog/internal/model"
+	"microblog/internal/utils"
 	"os"
 	"time"
 )

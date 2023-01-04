@@ -3,7 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"microblog/model"
+	"microblog/internal/model"
 	"net/http"
 	"regexp"
 	"strconv"

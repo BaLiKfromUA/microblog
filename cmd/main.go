@@ -2,8 +2,8 @@ package main
 
 import (
 	"log"
-	"microblog/repo"
-	"microblog/service"
+	"microblog/internal/repo"
+	"microblog/internal/service"
 	"os"
 )
 

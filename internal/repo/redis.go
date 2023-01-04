@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"log"
-	"microblog/model"
-	"microblog/utils"
+	"microblog/internal/model"
+	"microblog/internal/utils"
 	"os"
 	"time"
 )

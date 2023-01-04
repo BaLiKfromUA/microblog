@@ -2,7 +2,7 @@ package repo
 
 import (
 	"context"
-	"microblog/model"
+	"microblog/internal/model"
 )
 
 type Repository interface {

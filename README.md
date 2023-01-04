@@ -1,5 +1,7 @@
 # microblog
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/BaLiKfromUA/microblog?style=flat-square)](https://goreportcard.com/report/BaLiKfromUA/microblog)
+
 Twitter-like web service. The final project of the "System Design" course.
 
 ## Task
@@ -15,7 +17,7 @@ service must provide the following functionality:
 > A post's feed is a set of user's posts to which the current user is subscribed, ordered by time.
 - user subscription logic
 
-Formal description of API can be found in [api.yaml](./service/api.yaml).
+Formal description of API can be found in [api.yaml](api/api.yaml).
 
 As storage, I use **MongoDB** with caching based on **Redis**.
 

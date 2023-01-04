@@ -9,8 +9,8 @@ import (
 	"github.com/RichardKnop/machinery/v1/log"
 	"github.com/RichardKnop/machinery/v1/tasks"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"microblog/model"
-	"microblog/repo"
+	"microblog/internal/model"
+	"microblog/internal/repo"
 	"os"
 )
 

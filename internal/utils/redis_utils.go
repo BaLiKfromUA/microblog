@@ -1,6 +1,6 @@
 package utils
 
-import "microblog/model"
+import "microblog/internal/model"
 
 func CreateRedisKeyForPost(postId model.PostId) string {
 	return "post:" + string(postId)

@@ -3,7 +3,7 @@ package utils
 import (
 	"encoding/base64"
 	"github.com/google/uuid"
-	"microblog/model"
+	"microblog/internal/model"
 	"time"
 )
 
