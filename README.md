@@ -14,7 +14,6 @@ service must provide the following functionality:
 - getting the post by a unique identifier
 - getting all posts of requested user in reverse chronological order with pagination
 - getting the posts feed for an authorized user 
-> A post's feed is a set of user's posts to which the current user is subscribed, ordered by time.
 - user subscription logic
 
 Formal description of API can be found in [api.yaml](api/api.yaml).
