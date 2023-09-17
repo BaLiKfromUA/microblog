@@ -5,5 +5,5 @@ ADD . /app/
 WORKDIR /app
 
 RUN go mod tidy
-RUN go build -o ./cmd/main .
+RUN go build -o main ./cmd/
 CMD ["/app/main"]
